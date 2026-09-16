@@ -9,7 +9,11 @@ class BootScene extends Phaser.Scene {
   preload() {
     this.drawLoadingUI();
 
-    this.load.image('chara', 'assets/img/chara.png');
+    /* プレイヤーキャラ（キーは config の id） */
+    GAME.CHARAS.forEach(function (chara) {
+      this.load.image(chara.id, 'assets/img/' + chara.file);
+    }, this);
+
     this.load.image('logo', 'assets/img/logo.png');
     this.load.image('item_plus', 'assets/img/item_1.png');   /* ジュース：プラス */
     this.load.image('item_miss', 'assets/img/item_2.png');   /* たらい　：ミス   */

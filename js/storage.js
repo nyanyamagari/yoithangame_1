@@ -51,3 +51,34 @@ const ScoreStore = {
     try { window.localStorage.removeItem(this.KEY); } catch (e) { /* noop */ }
   }
 };
+
+/* =========================================================
+   選択中のキャラクター
+   ・リトライ時もそのまま使えるようメモリに持ち、次回起動用に localStorage にも保存
+   ・localStorage が使えない環境でもメモリ上の値で動く
+   ========================================================= */
+const CharaStore = {
+  KEY: 'taraiotoshi.chara',
+  current: null,
+
+  get: function () {
+    if (this.current === null) {
+      try {
+        this.current = window.localStorage.getItem(this.KEY);
+      } catch (e) {
+        this.current = null;
+      }
+    }
+    /* 保存値が古い・不正でも、必ず存在するキャラを返す */
+    return GAME.findChara(this.current).id;
+  },
+
+  set: function (id) {
+    this.current = GAME.findChara(id).id;
+    try {
+      window.localStorage.setItem(this.KEY, this.current);
+    } catch (e) {
+      /* 保存できなくてもメモリ上の選択で遊べる */
+    }
+  }
+};

@@ -17,10 +17,32 @@ const GAME = {
   SCORE_PLUS: 20,
   SCORE_MISS: -50,
 
-  /* プレイヤー */
+  /* プレイヤーの移動速度 */
   PLAYER_SPEED: 540,
-  PLAYER_WIDTH: 150,
-  PLAYER_Y: 838,
+
+  /*
+    プレイヤーキャラクター（タイトル画面で選ぶ。先頭が初期選択）
+      file   : assets/img/ 以下の画像
+      width  : ゲーム中の表示幅（高さは元画像の比率で自動計算）
+      bottom : ゲーム中の画像の下端のY座標（草地の上端は 876）
+      body   : 当たり判定。元画像のピクセル基準（x / y は画像左上からのオフセット）
+  */
+  CHARAS: [
+    {
+      id: 'chara_1',
+      file: 'chara_1.png',            /* 600 x 600（周囲に透明の余白あり） */
+      width: 150,
+      bottom: 895,                    /* 足元が草地の縁に乗る位置 */
+      body: { w: 492, h: 340, x: 69, y: 200 }
+    },
+    {
+      id: 'chara_2',
+      file: 'chara_2.png',            /* 600 x 479（旧 chara.png を縮小したもの） */
+      width: 150,
+      bottom: 898,                    /* 胴体が草地に少し埋まる位置（従来と同じ） */
+      body: { w: 492, h: 322, x: 54, y: 137 }
+    }
+  ],
 
   /* 地面（草地）の高さ */
   GROUND_H: 84,
@@ -96,6 +118,14 @@ const FONT = '"Yu Gothic", "Hiragino Sans", "Noto Sans JP", "Meiryo", sans-serif
 GAME.phaseIndexOf = function (elapsedSec) {
   const i = Math.floor(elapsedSec / GAME.PHASE_SECONDS);
   return Phaser.Math.Clamp(i, 0, GAME.PHASES.length - 1);
+};
+
+/* id からキャラクター定義を探す（見つからなければ先頭のキャラ） */
+GAME.findChara = function (id) {
+  for (let i = 0; i < GAME.CHARAS.length; i++) {
+    if (GAME.CHARAS[i].id === id) { return GAME.CHARAS[i]; }
+  }
+  return GAME.CHARAS[0];
 };
 
 /* スコアから称号を求める */

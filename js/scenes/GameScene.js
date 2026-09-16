@@ -23,35 +23,42 @@ class GameScene extends Phaser.Scene {
 
     UI.background(this);
 
-    /* ---- プレイヤー ---- */
-    const ratio = 1458 / 1828;
-    this.player = this.physics.add.sprite(W / 2, GAME.PLAYER_Y, 'chara');
-    this.player.setDisplaySize(GAME.PLAYER_WIDTH, GAME.PLAYER_WIDTH * ratio);
+    /* ---- プレイヤー（タイトルで選んだキャラ） ---- */
+    const chara = GAME.findChara(CharaStore.get());
+    this.chara = chara;
+
+    this.player = this.physics.add.sprite(W / 2, 0, chara.id);
+    UI.fitWidth(this.player, chara.width);
+    this.player.y = chara.bottom - this.player.displayHeight / 2;
     /* 演出でスケールを変えるので基準値を控えておく */
     this.baseScaleX = this.player.scaleX;
     this.baseScaleY = this.player.scaleY;
     this.player.setCollideWorldBounds(true);
     this.player.setDepth(20);
-    /* 当たり判定は元画像サイズ基準（表示スケールが自動で掛かる） */
-    const bodyW = 1500;
-    this.player.body.setSize(bodyW, 980);
-    this.player.body.setOffset((1828 - bodyW) / 2, 1458 - 980 - 60);
+
+    /* 当たり判定は元画像のピクセル基準（表示スケールが自動で掛かる） */
+    const body = chara.body;
+    this.player.body.setSize(body.w, body.h);
+    this.player.body.setOffset(body.x, body.y);
 
     /*
-      当たり判定は見た目より少し内側にあるため、その差分だけワールド境界を
+      当たり判定は見た目より内側にあるため、左右それぞれの差分だけワールド境界を
       内側に狭めておくと、キャラクターが画面端で見切れなくなる。
+      （判定が画像の中央からずれていても左右別々に計算するので正しく止まる）
       （落下アイテムは境界と衝突しないので影響を受けない）
+      +6px は傾き演出のはみ出し分
     */
-    /* +6px は傾き演出のはみ出し分 */
-    const inset = (GAME.PLAYER_WIDTH - bodyW * this.baseScaleX) / 2 + 6;
-    this.physics.world.setBounds(inset, 0, GAME.WIDTH - inset * 2, GAME.HEIGHT);
+    const texW = this.player.width;
+    const insetLeft = body.x * this.baseScaleX + 6;
+    const insetRight = (texW - body.x - body.w) * this.baseScaleX + 6;
+    this.physics.world.setBounds(insetLeft, 0, GAME.WIDTH - insetLeft - insetRight, GAME.HEIGHT);
 
-    /* 影（プレイヤーの表示サイズに追従させる） */
+    /* 影（キャラの表示サイズと足元の位置に合わせる） */
     this.shadow = this.add.ellipse(
       this.player.x,
-      GAME.PLAYER_Y + this.player.displayHeight / 2 - 4,
-      GAME.PLAYER_WIDTH * 0.8,
-      GAME.PLAYER_WIDTH * 0.17,
+      chara.bottom - 4,
+      chara.width * 0.8,
+      chara.width * 0.17,
       0x16305c,
       0.18
     ).setDepth(19);

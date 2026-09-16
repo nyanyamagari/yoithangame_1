@@ -57,6 +57,21 @@ const UI = {
     return obj;
   },
 
+  /* ---- 元画像の比率を保ったまま幅を指定する ---- */
+  fitWidth: function (obj, width) {
+    const src = obj.texture.getSourceImage();
+    obj.setDisplaySize(width, width * (src.height / src.width));
+    return obj;
+  },
+
+  /* ---- 元画像の比率を保ったまま、枠（maxW × maxH）に収まる最大サイズにする ---- */
+  fitContain: function (obj, maxW, maxH) {
+    const src = obj.texture.getSourceImage();
+    const scale = Math.min(maxW / src.width, maxH / src.height);
+    obj.setDisplaySize(src.width * scale, src.height * scale);
+    return obj;
+  },
+
   /* ---- アイテム画像を高さ指定で置く ---- */
   itemImage: function (scene, x, y, key, height) {
     return UI.fitHeight(scene.add.image(x, y, key), height);
@@ -132,6 +147,25 @@ const UI = {
     face.add([g, t]);
     container.add(face);
 
+    UI.pressable(scene, container, face, w, h, onClick, { pad: PAD, extraBottom: DEPTH });
+
+    return container;
+  },
+
+  /*
+    ---- 押せる部品の共通処理（ボタン・キャラ選択カードで使う） ----
+    container : 位置と当たり判定を持つ外側
+    face      : 押下・ホバーで拡大縮小させる内側（container の子）
+    w, h      : 見た目の大きさ（中心基準で描いている前提）
+    opts.pad         : 見た目より広く反応させる余白
+    opts.extraBottom : 下側だけ追加で反応させる幅（ボタンの厚み部分など）
+    opts.sound       : false にすると押したときの効果音を鳴らさない（呼び出し側で鳴らす場合）
+  */
+  pressable: function (scene, container, face, w, h, onClick, opts) {
+    const o = opts || {};
+    const PAD = o.pad === undefined ? 6 : o.pad;
+    const extraBottom = o.extraBottom || 0;
+
     /*
       当たり判定
       Container は displayOrigin が（幅/2, 高さ/2）なので、ヒット領域は「左上 = (0, 0)」基準で指定する。
@@ -139,12 +173,12 @@ const UI = {
     */
     container.setSize(w, h);
     container.setInteractive({
-      hitArea: new Phaser.Geom.Rectangle(-PAD, -PAD, w + PAD * 2, h + DEPTH + PAD * 2),
+      hitArea: new Phaser.Geom.Rectangle(-PAD, -PAD, w + PAD * 2, h + extraBottom + PAD * 2),
       hitAreaCallback: Phaser.Geom.Rectangle.Contains,
       useHandCursor: true
     });
 
-    /* このボタンの上で押し始めたか（別の場所で押して、ここで離しただけでは反応させない） */
+    /* この部品の上で押し始めたか（別の場所で押して、ここで離しただけでは反応させない） */
     let pressed = false;
 
     const animateFace = function (scale, duration, ease) {
@@ -174,7 +208,7 @@ const UI = {
       if (!pressed) { return; }
       pressed = false;
       animateFace(pointer.wasTouch ? 1 : 1.05, 160, 'Back.out');
-      Sfx.ui();
+      if (o.sound !== false) { Sfx.ui(); }
       onClick();
     });
 
