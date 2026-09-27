@@ -374,8 +374,11 @@ class TitleScene extends Phaser.Scene {
       delay: 1300,
       loop: true,
       callback: () => {
-        const key = Math.random() < 0.7 ? 'item_plus' : 'item_miss';
-        const item = UI.itemImage(this, Phaser.Math.Between(40, GAME.WIDTH - 40), -60, key, 54)
+        const isMiss = Math.random() >= 0.7;
+        const key = isMiss ? 'item_miss' : 'item_plus';
+        /* ゲーム中と同じ大きさの比率で表示する（ジュース 54px 基準） */
+        const height = 54 * (isMiss ? GAME.ITEM_HEIGHT.miss : GAME.ITEM_HEIGHT.plus) / GAME.ITEM_HEIGHT.plus;
+        const item = UI.itemImage(this, Phaser.Math.Between(40, GAME.WIDTH - 40), -60, key, height)
           .setAlpha(0.38)
           .setDepth(-70);
         this.tweens.add({

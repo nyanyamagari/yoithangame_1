@@ -53,10 +53,14 @@ const GAME = {
   /*
     アイテムの表示サイズ（高さ基準・幅は元画像の比率で自動計算）と当たり判定。
     当たり判定は元画像のピクセル基準で指定する（表示スケールが自動で掛かる）。
+    画像が回転・傾いているときは、当たり判定も同じ角度で回転する（GameScene.preciseHit）。
       plus … assets/img/item_1.png（ジュース 101 x 250）
       miss … assets/img/item_2.png（たらい   400 x 340／余白が多いので内側だけ判定）
   */
-  ITEM_HEIGHT: 86,
+  ITEM_HEIGHT: {
+    plus: 86,   /* ジュース：86px → 35 x 86 */
+    miss: 62    /* たらい　：62px → 73 x 62 */
+  },
   ITEM_BODY: {
     plus: { w: 78, h: 241, x: 11, y: 3 },
     miss: { w: 356, h: 224, x: 22, y: 58 }

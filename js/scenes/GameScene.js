@@ -20,6 +20,8 @@ class GameScene extends Phaser.Scene {
     this.phase = -1;
     this.running = false;
     this.finished = false;
+    /* シーンは再利用されるので、前回のデバッグ描画用オブジェクト（破棄済み）を持ち越さない */
+    this.hitboxDebug = null;
 
     UI.background(this);
 
@@ -65,7 +67,8 @@ class GameScene extends Phaser.Scene {
 
     /* ---- アイテム ---- */
     this.items = this.physics.add.group();
-    this.physics.add.overlap(this.player, this.items, this.onCatch, null, this);
+    /* 大まかな判定（円）で重なった候補だけ、preciseHit で回転した四角どうしを正確に判定する */
+    this.physics.add.overlap(this.player, this.items, this.onCatch, this.preciseHit, this);
 
     /* ---- 入力 ---- */
     this.cursors = this.input.keyboard.createCursorKeys();
@@ -275,15 +278,24 @@ class GameScene extends Phaser.Scene {
     const y = -50 - index * 90;
 
     const item = this.items.create(x, y, key);
-    UI.fitHeight(item, GAME.ITEM_HEIGHT);
+    UI.fitHeight(item, isMiss ? GAME.ITEM_HEIGHT.miss : GAME.ITEM_HEIGHT.plus);
     item.setDepth(10);
     item.setData('miss', isMiss);
 
-    /* 当たり判定は元画像のピクセル基準（表示スケールが自動で掛かる） */
+    /*
+      当たり判定（元画像のピクセル基準。表示スケールが自動で掛かる）
+      Arcade Physics の body は回転できないため、2段階で判定する。
+        1) 大まかな判定：どの角度に回っても判定の四角がはみ出さない円を body にする
+        2) 正確な判定  ：画像と同じ角度に回した四角で preciseHit() が判定する
+    */
     const b = isMiss ? GAME.ITEM_BODY.miss : GAME.ITEM_BODY.plus;
-    item.body.setSize(b.w, b.h);
-    item.body.setOffset(b.x, b.y);
+    item.setData('hitbox', b);
+
+    const reach = this.hitboxReach(b, item.width, item.height, item.scaleX);
+    item.body.setCircle(reach, item.width / 2 - reach, item.height / 2 - reach);
     item.body.setAllowGravity(false);
+    /* 大まかな円はデバッグ表示に出さず、回転した四角を drawHitboxDebug() で描く */
+    item.body.debugShowBody = false;
 
     item.setVelocityY(Phaser.Math.Between(p.speedMin, p.speedMax));
 
@@ -295,6 +307,112 @@ class GameScene extends Phaser.Scene {
     }
 
     return item;
+  }
+
+  /* =======================================================
+     回転に追従する当たり判定
+     ======================================================= */
+
+  /* 画像の中心から、判定の四角の一番遠い角までの距離（＝回転しても収まる円の半径） */
+  hitboxReach(b, texW, texH, scale) {
+    const xs = [b.x - texW / 2, b.x + b.w - texW / 2];
+    const ys = [b.y - texH / 2, b.y + b.h - texH / 2];
+    let reach = 0;
+    xs.forEach((x) => {
+      ys.forEach((y) => { reach = Math.max(reach, Math.hypot(x, y)); });
+    });
+    /*
+      Phaser は円の半径と中心を表示上で整数に切り捨てて判定するため、表示上 3px ぶんの余裕を足す
+      （縮小率が画像ごとに違うので、元画像のピクセルに換算して足す。
+        大きめでも正確な判定は preciseHit が行うので問題ない）
+    */
+    return Math.ceil(reach + 3 / scale);
+  }
+
+  /*
+    画像と同じ角度に回した判定の四角（ワールド座標）
+    物理演算の途中でも最新の状態を使えるよう、位置・角度は body から取る
+      cx, cy : 四角の中心 / hw, hh : 幅・高さの半分 / cos, sin : 向き
+  */
+  itemHitbox(item) {
+    const b = item.getData('hitbox');
+    const rot = Phaser.Math.DegToRad(item.body.rotation);
+    const cos = Math.cos(rot);
+    const sin = Math.sin(rot);
+    /* 回転の中心（画像の中心）から見た、判定の四角の中心（回転前） */
+    const lx = (b.x + b.w / 2 - item.width / 2) * item.scaleX;
+    const ly = (b.y + b.h / 2 - item.height / 2) * item.scaleY;
+    /* body.center は半径の切り捨てで最大1pxずれるので、切り捨て前の幅から中心を求める */
+    const centerX = item.body.position.x + item.body.width / 2;
+    const centerY = item.body.position.y + item.body.height / 2;
+    return {
+      cx: centerX + lx * cos - ly * sin,
+      cy: centerY + lx * sin + ly * cos,
+      hw: b.w * item.scaleX / 2,
+      hh: b.h * item.scaleY / 2,
+      cos: cos,
+      sin: sin
+    };
+  }
+
+  /* 回転した四角の4つの角 */
+  hitboxCorners(o) {
+    const ux = o.cos * o.hw;
+    const uy = o.sin * o.hw;
+    const vx = -o.sin * o.hh;
+    const vy = o.cos * o.hh;
+    return [
+      { x: o.cx - ux - vx, y: o.cy - uy - vy },
+      { x: o.cx + ux - vx, y: o.cy + uy - vy },
+      { x: o.cx + ux + vx, y: o.cy + uy + vy },
+      { x: o.cx - ux + vx, y: o.cy - uy + vy }
+    ];
+  }
+
+  /*
+    回転した四角（アイテム）と回転しない四角（プレイヤー）が重なっているか。
+    分離軸判定：4本の軸（画面の縦横＋アイテムの縦横）のどれかで影が離れていれば重なっていない
+  */
+  hitboxOverlapsRect(o, left, top, right, bottom) {
+    const rw = (right - left) / 2;
+    const rh = (bottom - top) / 2;
+    const dx = o.cx - (left + rw);
+    const dy = o.cy - (top + rh);
+    const axes = [[1, 0], [0, 1], [o.cos, o.sin], [-o.sin, o.cos]];
+
+    for (let i = 0; i < axes.length; i++) {
+      const ax = axes[i][0];
+      const ay = axes[i][1];
+      const itemRadius = o.hw * Math.abs(o.cos * ax + o.sin * ay) + o.hh * Math.abs(-o.sin * ax + o.cos * ay);
+      const rectRadius = rw * Math.abs(ax) + rh * Math.abs(ay);
+      if (Math.abs(dx * ax + dy * ay) > itemRadius + rectRadius) { return false; }
+    }
+    return true;
+  }
+
+  /* overlap の正確な判定（true を返したときだけ onCatch が呼ばれる） */
+  preciseHit(player, item) {
+    if (!this.running || item.getData('taken')) { return false; }
+    const pb = player.body;
+    return this.hitboxOverlapsRect(this.itemHitbox(item), pb.left, pb.top, pb.right, pb.bottom);
+  }
+
+  /*
+    デバッグ表示（main.js の arcade.debug: true）のとき、回転した判定の四角を描く。
+    Arcade の標準のデバッグ表示は回転に対応しないため、アイテムだけ自前で描いている。
+  */
+  drawHitboxDebug() {
+    if (!this.physics.world.drawDebug) { return; }
+    if (!this.hitboxDebug) {
+      this.hitboxDebug = this.add.graphics().setDepth(1000);
+    }
+    const gfx = this.hitboxDebug;
+    gfx.clear();
+    gfx.lineStyle(2, 0xff00ff, 1);
+    this.items.getChildren().forEach((item) => {
+      if (!item.active || !item.body) { return; }
+      gfx.strokePoints(this.hitboxCorners(this.itemHitbox(item)), true, true);
+    });
   }
 
   /* =======================================================
@@ -470,5 +588,7 @@ class GameScene extends Phaser.Scene {
         children[i].destroy();
       }
     }
+
+    this.drawHitboxDebug();
   }
 }
